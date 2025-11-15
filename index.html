@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐾 动物塑性格测试：你的灵魂原型</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js CDN (功能已移除，但保留CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <!-- --- 样式定义：高贵紫色主题 --- -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        :root {
+            --primary: #5B21B6; /* Deep Purple */
+            --secondary: #A78BFA; /* Lavender */
+            --background: #F5F3FF; /* Light Gray Purple */
+            --accent: #FBBF24; /* Amber Gold (用作突出和高贵色彩) */
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background);
+            transition: all 0.3s ease-in-out;
+        }
+        .card {
+            background-color: white;
+            border-radius: 1.5rem;
+            /* 柔和的紫色阴影 */
+            box-shadow: 0 10px 30px -5px rgba(91, 33, 182, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            transition: background-color 0.2s, transform 0.1s;
+            box-shadow: 0 4px var(--accent); /* 琥珀金底影 */
+        }
+        .btn-primary:hover {
+            background-color: #4C1D95;
+            transform: translateY(-2px);
+            box-shadow: 0 6px var(--accent);
+        }
+        .option-button {
+            border: 2px solid var(--secondary);
+            color: var(--primary);
+            transition: all 0.2s;
+            border-radius: 1rem;
+        }
+        .option-button:hover {
+            background-color: var(--secondary);
+            color: white;
+            transform: scale(1.01);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .selected-option {
+            background-color: var(--primary) !important;
+            border-color: var(--primary) !important;
+            color: white !important;
+            font-weight: 600;
+        }
+        .page-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        [data-page]:not(.active) {
+            display: none;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* 确保结果分析区的 HTML 标签能被正确渲染 */
+        #low-score-advice strong {
+             font-weight: bold;
+        }
+        /* 动物图标样式 */
+        #archetype-icon-container {
+            width: 12rem; /* w-48 */
+            height: 12rem; /* h-48 */
+            border: 4px solid var(--secondary);
+            background-color: white;
+            border-radius: 9999px; /* rounded-full */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #animal-icon {
+            font-size: 5rem; /* text-8xl approx */
+        }
+    </style>
+
+    <!-- --- Firebase 初始化脚本 (Module) --- -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, collection, setLogLevel, query, limit, getDocs, orderBy, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-animal-test-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, db, auth;
+        let userId = null;
+
+        setLogLevel('debug'); 
+
+        const initializeFirebase = async () => {
+            // 检查 Firebase 配置是否有效
+            const hasFirebaseConfig = firebaseConfig && firebaseConfig.apiKey;
+            
+            if (!hasFirebaseConfig) {
+                console.log("无 Firebase 配置，将使用离线模式");
+                window.isAuthReady = true;
+                window.fb = { getUserId: () => 'offline-user-' + Date.now(), getAppId: () => appId };
+                window.firestoreMethods = { doc: () => ({}), setDoc: () => Promise.resolve(), collection: () => ({}), query: () => ({}), limit: () => ({}), getDocs: () => Promise.resolve({ empty: true, forEach: () => {} }), orderBy: () => ({}) };
+                if (window.quizApp) window.quizApp.checkReadiness();
+                return;
+            }
+
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                    } else {
+                        try {
+                            if (initialAuthToken) {
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                            userId = auth.currentUser.uid;
+                        } catch (error) {
+                            console.error("Firebase 登录失败:", error);
+                        }
+                    }
+                    window.isAuthReady = true;
+                    // Expose methods to global scope
+                    window.fb = { db, auth, getUserId: () => userId, getAppId: () => appId };
+                    window.firestoreMethods = { doc, setDoc, collection, query, limit, getDocs, orderBy, addDoc };
+                    
+                    if (window.quizApp) window.quizApp.checkReadiness();
+                });
+
+            } catch (error) {
+                console.error("Firebase 初始化失败:", error);
+                window.isAuthReady = true;
+                if (window.quizApp) window.quizApp.checkReadiness();
+            }
+        };
+
+        window.addEventListener('load', initializeFirebase);
+    </script>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <!-- 加载指示器 -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 z-50 flex items-center justify-center hidden">
+        <div class="spinner"></div>
+        <p class="ml-3 text-lg text-gray-700">正在解析您的灵魂原型...</p>
+    </div>
+
+    <!-- 首页 - 项目简介与同意书 -->
+    <div id="home-page" data-page="home" class="page-container active">
+        <div class="card p-8 max-w-xl w-full text-center">
+            
+            <header class="mb-8 border-b-2 border-primary/20 pb-4">
+                <p class="text-xl font-medium text-secondary mb-2 tracking-widest">
+                    灵魂探索计划 | 64 问
+                </p>
+                <h1 class="text-5xl font-extrabold text-primary leading-tight">
+                    🐾 你的动物塑原型
+                </h1>
+            </header>
+            
+            <p class="text-lg text-gray-700 mb-6 leading-relaxed">
+                人类的每一个细微选择，都与自然界某种动物的生存本能和独特光芒相连。这份问卷是通往你潜意识的钥匙，它将在 20 种灵魂动物中，为你揭示最真实的自我。
+            </p>
+
+            <div class="space-y-4 text-left mb-8 px-2">
+                <h2 class="text-xl font-bold text-primary mb-3">完成测试，你将获得：</h2>
+                
+                <!-- 列表美化 -->
+                <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
+                    <span class="text-2xl text-accent">💜</span>
+                    <p class="text-gray-800 font-semibold">独一无二的灵魂动物动物塑</p>
+                </div>
+                 <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
+                    <span class="text-2xl text-accent">✨</span>
+                    <p class="text-gray-800 font-semibold">三个最贴切的专属性感标签</p>
+                </div>
+                 <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
+                    <span class="text-2xl text-accent">🚀</span>
+                    <p class="text-gray-800 font-semibold">深度解析你的行为特质与成长建议</p>
+                </div>
+            </div>
+
+            <div class="border border-gray-300 py-6 mb-8 text-left bg-gray-50 p-4 rounded-xl">
+                <h2 class="text-xl font-bold text-primary mb-3">知情同意书 (匿名参与)</h2>
+                <p class="text-sm text-gray-600 space-y-1">
+                  1. 本测试仅供娱乐和自我反思，不具备专业心理学诊断效力。
+                  2. 您是完全自愿参与的，可以在任何时候退出。
+                  3. 本结果仅用于展示和优化题目，我们不会收集您的敏感信息。
+                </p>
+            </div>
+
+            <button id="start-quiz-btn" class="btn-primary w-full py-4 text-xl font-bold rounded-xl">
+                我同意并开始测试 🚀
+            </button>
+        </div>
+    </div>
+    
+    <!-- 题目页 -->
+    <div id="quiz-page" data-page="quiz" class="page-container">
+        <div class="card p-6 max-w-xl w-full">
+            <header class="mb-6">
+                <div id="quiz-progress" class="mb-4 text-center">
+                    <span class="text-primary font-bold text-2xl" id="current-q-num">1</span>
+                    <span class="text-gray-400 text-xl">/64</span>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                        <div id="progress-bar" class="bg-primary h-2.5 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                    </div>
+                </div>
+            </header>
+
+            <main>
+                <p id="question-text" class="text-2xl font-semibold text-gray-800 text-center leading-relaxed mb-6 min-h-[4rem] flex items-center justify-center">
+                    加载题目中...
+                </p>
+                <div id="options-container" class="space-y-4">
+                    <!-- 选项将通过 JS 动态生成 -->
+                </div>
+            </main>
+
+            <footer class="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center">
+                <button id="prev-button" class="text-sm text-gray-500 hover:text-primary transition-colors disabled:opacity-50" disabled>
+                    &larr; 返回上一题
+                </button>
+                <button id="submit-button" class="btn-primary py-3 px-8 text-lg font-bold rounded-xl hidden" disabled>
+                    查看测试结果 🚀
+                </button>
+            </footer>
+        </div>
+    </div>
+    
+    <!-- 结果页 -->
+    <div id="result-page" data-page="result" class="page-container">
+        <div class="card p-6 max-w-3xl w-full">
+            <h2 class="text-4xl font-extrabold text-primary text-center mb-6">
+                🎉 你的动物塑已解析完成
+            </h2>
+            <div class="flex flex-col gap-6 items-center">
+                <!-- 动物塑图和点评 (居中显示) -->
+                <div class="w-full max-w-md">
+                    <div class="flex justify-center mb-4">
+                        <!-- 使用 Div 容器和 Span 标签来显示 Emoji -->
+                        <div id="archetype-icon-container">
+                            <span id="animal-icon"></span> 
+                        </div>
+                    </div>
+                    <h3 class="text-4xl font-bold text-center text-gray-800 mb-2" id="archetype-name"></h3>
+                    <p class="text-base text-center text-gray-500 mb-4" id="archetype-description"></p>
+                    
+                    <div id="top-attributes" class="mb-6 flex flex-wrap justify-center gap-3">
+                        <!-- 专属性感标签将在此处插入 -->
+                    </div>
+
+                    <!-- 深度点评 - 增加色彩和对比度 -->
+                    <div class="p-4 bg-[#EDE9FE] rounded-xl border border-primary/40 mb-6">
+                        <h4 class="font-extrabold text-primary mb-2 text-2xl tracking-wide">【动物塑深度点评】</h4>
+                        <p id="archetype-commentary" class="text-gray-700 text-base leading-relaxed"></p>
+                    </div>
+
+                    <!-- 成长空间与小建议 - 使用 accent 强调 -->
+                    <div class="p-4 bg-accent/10 rounded-xl border border-accent/60">
+                        <h4 class="font-extrabold text-accent mb-2 text-2xl">🌱 成长空间与小建议</h4>
+                        <p id="low-score-advice" class="text-gray-800 text-base leading-relaxed whitespace-pre-line">（此区块将用于展示该动物塑模型的关键特质描述）</p>
+                    </div>
+                </div>
+            </div>
+            
+            <button id="restart-button" class="btn-primary w-full mt-6 py-3 rounded-xl font-bold">
+                再次探索你的灵魂 🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- --- 主应用逻辑 (Non-Module) --- -->
+    <script>
+        const TOTAL_QUESTIONS = 64;
+        let currentQuestionIndex = 0;
+        let userAnswers = new Array(TOTAL_QUESTIONS).fill(null);
+        let chartInstance = null; 
+
+        // *******************************************************************
+        // 20 个动物原型及其详细信息 (ANIMAL_ARCHETYPES) - 新增 ICON (Emoji)
+        // *******************************************************************
+        const ANIMAL_ARCHETYPES = {
+            // R: 理性规划 / 谋略
+            'Wolf': { name: "狼 (Wolf)", dimension: 'R', tags: ["战略", "领导力", "责任感"], description: "天生的领袖与战略家。", commentary: "你的理性与谋略倾向使你成为天生的战略家。你擅长规划、设定目标，并在团队中承担核心决策角色。", icon: "🐺" },
+            'Fox': { name: "狐 (Fox)", dimension: 'R', tags: ["机敏", "独立", "高适应"], description: "机敏的策略家与孤独的观察者。", commentary: "你以智慧和敏捷著称，倾向于独立思考和‘智取’。在你的世界里，找到最优解比正面硬刚更重要。你的挑战在于，过度的独立可能会让你错过团队协作的红利。", icon: "🦊" },
+            'Crow': { name: "乌鸦 (Crow)", dimension: 'R', tags: ["信息", "洞察力", "快速学习"], description: "聪慧的谜题解决者与信息的传递者。", commentary: "你渴望知识、逻辑和信息的完整性。你的头脑是无法被预测的武器，善于观察和学习。建议将你的高智商应用于更广阔的人类互动领域，而非仅仅是抽象的谜题。", icon: "🐦‍⬛" },
+            'Raccoon': { name: "浣熊 (Raccoon)", dimension: 'R', tags: ["灵活", "变通", "解决问题"], description: "机灵的都市探险家，总能找到解决问题的“歪路子”。", commentary: "你拥有极强的适应性和解决问题的能力，尤其擅长在既有规则中找到漏洞。你的思维灵活且务实。请确保你的‘歪路子’始终保持在道德底线之上，才能赢得真正的尊重。", icon: "🦝" },
+            // E: 情感连接 / 忠诚
+            'Dog': { name: "狗 (Dog)", dimension: 'E', tags: ["忠诚", "热情", "社群核心"], description: "忠诚的伙伴与热情的守护者，你的世界围绕着“我们”展开。", commentary: "你的情感连接特质使你成为一个无私、热情的社群动物。你为爱而生，乐于奉献。但请务必设立个人边界，防止你的忠诚被过度消耗。", icon: "🐕" },
+            'Dolphin': { name: "海豚 (Dolphin)", dimension: 'E', tags: ["合作", "玩乐", "高情商"], description: "智慧的嬉戏者与团队合作的典范，充满玩乐精神。", commentary: "你擅长在群体中协作，并拥有高度发达的情感智能。你的快乐来源于互动和探索，是团队中的粘合剂。记住，玩乐也是一种力量，但严肃的时刻也需要你挺身而出。", icon: "🐬" },
+            'Parrot': { name: "鹦鹉 (Parrot)", dimension: 'E', tags: ["社交", "表演家", "活力"], description: "聪明的社交达人与天生的表演家，擅长模仿和学习。", commentary: "你热爱社交和互动，是派对上的焦点和信息中心。你通过交流来建立联系和获取安全感。挑战在于保持自我核心的独特性，避免过度模仿他人。", icon: "🦜" },
+            'Whale': { name: "鲸 (Whale)", dimension: 'E', tags: ["深邃", "包容", "情感记忆"], description: "深海的哲学家，古老而智慧，承载着厚重的记忆。", commentary: "你的情感深邃而广阔，像海洋一样包容万物。你能在广阔的社群中进行深沉的交流。你的挑战在于如何平衡这种深邃的情感与日常的琐碎，避免陷入孤独的自怜。", icon: "🐋" },
+            // I: 内在松弛 / 舒适
+            'Bear': { name: "熊 (Bear)", dimension: 'I', tags: ["沉稳", "安逸", "内在修复"], description: "沉稳的守护者，大部分时间安静平和，重视安全感。", commentary: "你追求身心的舒适与内在的平衡，拥有强大的自我修复能力。你的哲学是‘慢下来’。请确保你的安全区不会变成牢笼，偶尔也需要接触外界的刺激来保持活力。", icon: "🐻" },
+            'Hamster': { name: "仓鼠 (Hamster)", dimension: 'I', tags: ["囤积", "安逸", "自洽"], description: "专注的囤积者与安逸的生活家，喜欢建立充满安全感的“小窝”。", commentary: "你最大的幸福来自于内在的富足和安全感的建立。你享受在自己的小世界里自得其乐。你的优点是情绪稳定，但需要警惕对外界变化的可爱迟钝，以防错失良机。", icon: "🐹" },
+            'Rabbit': { name: "兔 (Rabbit)", dimension: 'I', tags: ["警觉", "和平主义", "低调"], description: "警觉的和平主义者，极度需要安全感，擅长躲避冲突。", commentary: "你对环境变化敏感，行动敏捷，总是能找到最安全、最舒适的角落。你的挑战在于，为了和平而过度妥协可能会让你失去自我。在安全的小圈子里，你是最活泼的。", icon: "🐇" },
+            'Sloth': { name: "树懒 (Sloth)", dimension: 'I', tags: ["慢节奏", "松弛", "节能"], description: "慢节奏的哲学家，情绪稳定且自洽，避免一切不必要的能量消耗。", commentary: "你奉行极简的生存哲学，将身心调至最舒适的状态。你的智慧在于不与急躁的外部世界纠缠。这种哲学能带来长寿，但可能会让你在关键时刻行动迟缓，错失机会。", icon: "🦥" },
+            // F: 自由探索 / 独立
+            'Cat': { name: "猫 (Cat)", dimension: 'F', tags: ["独立", "灵动", "疏离感"], description: "优雅的独立思想家，享受独处，拥有无法预测的灵动。", commentary: "你追求精神和肉体上的绝对自由，享受独处的时光，这让你内心世界丰富。你的魅力在于若即若离的疏离感，但要小心，过度独立可能会让你在需要支持时显得孤立无援。", icon: "🐈" },
+            'Eagle': { name: "鹰 (Eagle)", dimension: 'F', tags: ["远见", "决心", "高傲"], description: "高傲的远见者，拥有无与伦比的视野和决心，习惯从高处审视全局。", commentary: "你具备宏大的格局和坚定的意志力，渴望超越平庸和极限。你享受孤独，因为那能让你看得更清。你的挑战在于如何将你高远的蓝图落地，并与凡人进行有效沟通。", icon: "🦅" },
+            'Shark': { name: "鲨鱼 (Shark)", dimension: 'F', tags: ["专注", "高效", "独行"], description: "高效的目标追逐者，专注、直接、充满力量，习惯独来独往。", commentary: "你的生存法则简单纯粹：设定目标，然后心无旁骛地前进。你不需要复杂的社交关系，力量来源于你的专注。请注意，有时候倾听不同的声音能让你避开暗礁。", icon: "🦈" },
+            'Deer': { name: "鹿 (Deer)", dimension: 'F', tags: ["温和", "敏感", "精神自由"], description: "温和的自然之子，敏感而优雅，沉浸在自己的精神世界里。", commentary: "你向往自然之美和宁静，警惕性高，需要自由和安全的精神空间。你的美在于那份不染尘埃的纯净，但过度的敏感可能会让你在面对现实冲突时显得脆弱。", icon: "🦌" },
+            // P: 力量主宰 / 优雅
+            'Lion': { name: "狮 (Lion)", dimension: 'P', tags: ["统御", "威严", "魅力"], description: "自信的王者，有强烈的统御欲和表现力，享受成为焦点的感觉。", commentary: "你天生自带光环，充满力量与威严，喜欢制定规则和引领方向。你的慷慨和魅力是你的武器。你的任务是学会如何公平地使用你的力量，将威严转化为真正的信服。", icon: "🦁" },
+            'Swan': { name: "天鹅 (Swan)", dimension: 'P', tags: ["高贵", "美学", "从容"], description: "优雅的理想主义者，对美有着极致的追求，姿态高贵。", commentary: "你将优雅视为一种力量，不容忍粗俗与将就。你的内心对家庭和伴侣极为忠诚。请记住，真正的力量也包含着对不完美和缺憾的宽容。", icon: "🦢" },
+            'Maggot': { name: "蛆 (Maggot)", dimension: 'P', tags: ["细微", "顽强", "高分解力"], description: "微观天地里的顽强求生者，拥有强大的分解重塑之力。", commentary: "你的力量在于‘转化’——将腐朽化为新生，是生态循环中不可或缺的一环。你具有极强的适应性。你的挑战是，学会将这种内在的转化力量，以外在的形式表达出来，以获得世俗的认可。", icon: "🐛" },
+            'Octopus': { name: "章鱼 (Octopus)", dimension: 'P', tags: ["伪装", "多面", "创造力"], description: "深海的智者与伪装大师，拥有惊人的智慧和解决问题的能力。", commentary: "你的力量源于你的高智商、变色和伪装能力。你是一个多面手，擅长独立思考和策略展现。你的挑战是，过于强大的自我保护和伪装可能会让你难以建立真诚的连接，限制了你影响力的广度。", icon: "🐙" },
+        };
+        
+        // *******************************************************************
+        // 问卷题目数据 (64 题) - 已精确分配动物ID
+        // *******************************************************************
+        const quizData = [
+            // Q1-Q16: A:Wolf, B:Dog, C:Bear, D:Cat, E:Lion (R, E, I, F, P)
+            { question: "世界是一片漆黑的森林，你选择成为？", options: [{ text: "规划路线的指南针", animalID: "Wolf", dimScore: 'R' }, { text: "在林间温暖的篝火", animalID: "Dog", dimScore: 'E' }, { text: "隐藏在古树根下的古井", animalID: "Bear", dimScore: 'I' }, { text: "一阵穿过所有缝隙的风", animalID: "Cat", dimScore: 'F' }, { text: "默默分解枯枝败叶的土壤微生物", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你获得一块记忆橡皮擦，你会擦掉？", options: [{ text: "你犯下的一个无法弥补的错误", animalID: "Wolf", dimScore: 'R' }, { text: "一段让你心碎的感情", animalID: "Dog", dimScore: 'E' }, { text: "所有关于你努力失败的记忆", animalID: "Bear", dimScore: 'I' }, { text: "别人对你的所有亏欠，让心灵彻底自由", animalID: "Cat", dimScore: 'F' }, { text: "你最尴尬最羞耻的那个瞬间", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你意外获得一个“生活BUG”控制台，一天只能用一个指令，你会输入？", options: [{ text: "显示所有事物的隐藏信息", animalID: "Wolf", dimScore: 'R' }, { text: "召唤会跳舞的羊驼和朋友", animalID: "Dog", dimScore: 'E' }, { text: "一键生成绝对舒适区", animalID: "Bear", dimScore: 'I' }, { text: "开启主角光环", animalID: "Cat", dimScore: 'F' }, { text: "时间流速：-50% (让一切慢下来)", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你更倾向于哪种形式的“永生”？", options: [{ text: "你的思想、作品或传说被永远流传", animalID: "Wolf", dimScore: 'R' }, { text: "灵魂转世，不断体验不同的人生", animalID: "Dog", dimScore: 'E' }, { text: "化为自然的一部分，如山脉或河流，静观万物", animalID: "Bear", dimScore: 'I' }, { text: "拥有不朽的肉体，看着沧海桑田", animalID: "Cat", dimScore: 'F' }, { text: "生活在一个永恒的梦境里", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你内心最深处的恐惧，更接近于？", options: [{ text: "失去控制，被原始的冲动或混乱所吞噬", animalID: "Wolf", dimScore: 'R' }, { text: "被所有人遗忘，仿佛从未存在过", animalID: "Dog", dimScore: 'E' }, { text: "无法适应当下的环境变化", animalID: "Bear", dimScore: 'I' }, { text: "被囚禁，无论是物理上还是精神上", animalID: "Cat", dimScore: 'F' }, { text: "成为一个无聊、平庸、可被替代的人", animalID: "Lion", dimScore: 'P' }] },
+            { question: "在你的梦境中，哪种场景反复出现？", options: [{ text: "在一个错综复杂的建筑里奔跑，找不到出口", animalID: "Wolf", dimScore: 'R' }, { text: "和一群模糊不清但感觉熟悉的人在一起", animalID: "Dog", dimScore: 'E' }, { text: "缓慢地向上攀爬一棵永无止境的巨树", animalID: "Bear", dimScore: 'I' }, { text: "站在悬崖边，俯瞰着壮丽但危险的景色", animalID: "Cat", dimScore: 'F' }, { text: "在无边无际的水中，时而漂浮，时而下沉", animalID: "Lion", dimScore: 'P' }] },
+            { question: "如果你的情绪是一个APP，它最常用的功能是？", options: [{ text: "“后台运行”模式，表面平静，CPU算到冒烟", animalID: "Wolf", dimScore: 'R' }, { text: "“弹幕分享”功能，把所有内心OS都发到好友群里", animalID: "Dog", dimScore: 'E' }, { text: "“睡眠模式”，减少对外界刺激的反应", animalID: "Bear", dimScore: 'I' }, { text: "“飞行模式”，一键断开所有连接，谢绝打扰", animalID: "Cat", dimScore: 'F' }, { text: "“静音模式”，所有通知都只显示角标，不发出任何声音", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你认为“家”的本质是什么？", options: [{ text: "一个可以卸下所有伪装和防备的绝对领域", animalID: "Wolf", dimScore: 'R' }, { text: "一群可以无条件接纳你、与你共享喜悦的人", animalID: "Dog", dimScore: 'E' }, { text: "能满足所有基本生理需求的庇护所", animalID: "Bear", dimScore: 'I' }, { text: "一个精神坐标，无论身在何处，心之所向", animalID: "Cat", dimScore: 'F' }, { text: "刻在你基因里但那个回不去的故乡", animalID: "Lion", dimScore: 'P' }] },
+            { question: "如果必须选择一种感官来放大十倍，你会选？", options: [{ text: "视觉，看穿表象，洞悉世界的结构", animalID: "Wolf", dimScore: 'R' }, { text: "触觉，感受世界的质地和温度", animalID: "Dog", dimScore: 'E' }, { text: "内在感知（身体内部信号，饥饿、疲劳、心跳）", animalID: "Bear", dimScore: 'I' }, { text: "听觉，聆听万物的低语和弦外之音", animalID: "Cat", dimScore: 'F' }, { text: "嗅觉，捕捉空气中隐藏的信息和记忆", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你如何看待自己的“阴暗面”？", options: [{ text: "是我力量的源泉，需要被理解和掌控", animalID: "Wolf", dimScore: 'R' }, { text: "是需要努力克服的弱点", animalID: "Dog", dimScore: 'E' }, { text: "是我适应环境、保全自身的本能", animalID: "Bear", dimScore: 'I' }, { text: "我尽量忽略它，不去想它", animalID: "Cat", dimScore: 'F' }, { text: "只是我的一部分，没必要大惊小怪", animalID: "Lion", dimScore: 'P' }] },
+            { question: "死亡来临时，你希望它是何种形态？", options: [{ text: "像一场酣睡，在最温暖的梦中不再醒来", animalID: "Wolf", dimScore: 'R' }, { text: "像烟花一样，在最绚烂的瞬间燃烧殆尽", animalID: "Dog", dimScore: 'E' }, { text: "在平静中等待，慢慢融入环境", animalID: "Bear", dimScore: 'I' }, { text: "像一场远航，驶向未知的星辰大海", animalID: "Cat", dimScore: 'F' }, { text: "如秋叶般静美地飘落，回归大地", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你觉得最“性感”的特质是？", options: [{ text: "专注做某件事时，遗世独立的气质", animalID: "Wolf", dimScore: 'R' }, { text: "毫不掩饰的原始的生命力", animalID: "Dog", dimScore: 'E' }, { text: "无欲无求的松弛感", animalID: "Bear", dimScore: 'I' }, { text: "饱经沧桑后，依然敢于直视一切的眼神", animalID: "Cat", dimScore: 'F' }, { text: "在混乱中依旧保持从容的优雅", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你认为最浪漫的事是？", options: [{ text: "在暴风雨的夜晚，共享一杯热茶", animalID: "Wolf", dimScore: 'R' }, { text: "跨越所有语言和界限，心照不宣的默契", animalID: "Dog", dimScore: 'E' }, { text: "静静地依偎在一起，什么都不用说", animalID: "Bear", dimScore: 'I' }, { text: "一场说走就走充满未知的冒险", animalID: "Cat", dimScore: 'F' }, { text: "共同创造一个只属于你们的、伟大的作品", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你会为什么样的人“拼命”？", options: [{ text: "为值得我追随的拥有共同信念的领袖", animalID: "Wolf", dimScore: 'R' }, { text: "为我视为“家人”的整个群体", animalID: "Dog", dimScore: 'E' }, { text: "为那个无条件信任我、依赖我的人", animalID: "Bear", dimScore: 'I' }, { text: "为那个点燃我灵魂之火的人", animalID: "Cat", dimScore: 'F' }, { text: "为所有处于困境、脆弱无助的人", animalID: "Lion", dimScore: 'P' }] },
+            { question: "当关系结束时，你更像是？", options: [{ text: "被风吹散的云，形态改变，本质依旧", animalID: "Wolf", dimScore: 'R' }, { text: "改道的河流，奔向新的海洋", animalID: "Dog", dimScore: 'E' }, { text: "安静地回到舒适区，等待下一段缘分", animalID: "Bear", dimScore: 'I' }, { text: "冰封的火山，外冷内热", animalID: "Cat", dimScore: 'F' }, { text: "被砍掉枝干的树，需要漫长的春天才能发芽", animalID: "Lion", dimScore: 'P' }] },
+            { question: "你最不能容忍的“背叛”是？", options: [{ text: "因为懦弱而放弃了我们的共同目标", animalID: "Wolf", dimScore: 'R' }, { text: "在我最需要的时候转身离开", animalID: "Dog", dimScore: 'E' }, { text: "破坏了双方默认的安稳状态", animalID: "Bear", dimScore: 'I' }, { text: "谎言与欺骗", animalID: "Cat", dimScore: 'F' }, { text: "将我的秘密公之于众", animalID: "Lion", dimScore: 'P' }] },
+
+            // Q17-Q32: A:Fox, B:Dolphin, C:Hamster, D:Eagle, E:Swan
+            { question: "你理想的伴侣关系是？", options: [{ text: "两棵独立的树，根在地下紧紧相连", animalID: "Fox", dimScore: 'R' }, { text: "一团火焰，相互燃烧，照亮彼此", animalID: "Dolphin", dimScore: 'E' }, { text: "一个安全的洞穴，共同抵御外界的风雨", animalID: "Hamster", dimScore: 'I' }, { text: "两只一同翱翔的鹰，共享同一片天空", animalID: "Eagle", dimScore: 'F' }, { text: "两团慢悠悠漂浮的云，最终汇聚在一起", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你更希望被如何“记住”？", options: [{ text: "一个时代的开创者", animalID: "Fox", dimScore: 'R' }, { text: "一个可靠的朋友，一个温暖的港湾", animalID: "Dolphin", dimScore: 'E' }, { text: "一个懂得享受生活、不给人添麻烦的人", animalID: "Hamster", dimScore: 'I' }, { text: "一个有趣的灵魂，一个传奇的故事", animalID: "Eagle", dimScore: 'F' }, { text: "一个优雅的谜，一段美丽的风景", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你最想对这个世界说的一句话是？", options: [{ text: "“看好了。”", animalID: "Fox", dimScore: 'R' }, { text: "“一起玩吧！”", animalID: "Dolphin", dimScore: 'E' }, { text: "“慢慢来。”", animalID: "Hamster", dimScore: 'I' }, { text: "“嘘，听。”", animalID: "Eagle", dimScore: 'F' }, { text: "“别怕，有我呢。”", animalID: "Swan", dimScore: 'P' }] },
+            { question: "当你深爱一个人时，你更倾向于如何表达这份感情？", options: [{ text: "将对方纳入自己未来的规划，并为其扫清障碍", animalID: "Fox", dimScore: 'R' }, { text: "与对方分享自己最隐秘的精神世界和独特的发现", animalID: "Dolphin", dimScore: 'E' }, { text: "让我的存在成为他的一个稳定、持续的背景", animalID: "Hamster", dimScore: 'I' }, { text: "创造只属于两个人的共同经历和冒险回忆", animalID: "Eagle", dimScore: 'F' }, { text: "默默地为对方做好许多事，但从不主动提起", animalID: "Swan", dimScore: 'P' }] },
+            { question: "在群体中，你最舒服的位置是？", options: [{ text: "在人群边缘，做一个冷静的观察者", animalID: "Fox", dimScore: 'R' }, { text: "在亲密的小圈子里，被温暖和信任包围", animalID: "Dolphin", dimScore: 'E' }, { text: "舒服地窝在一个角落，不太引人注意", animalID: "Hamster", dimScore: 'I' }, { text: "在队伍的最前方，带领大家前进", animalID: "Eagle", dimScore: 'F' }, { text: "在舞台的聚光灯下", animalID: "Swan", dimScore: 'P' }] },
+            { question: "面对挑衅，你的第一反应是？", options: [{ text: "微笑，但在心里已经将对方盘算了一遍", animalID: "Fox", dimScore: 'R' }, { text: "一声响亮的、极具穿透力的咆哮，震慑全场", animalID: "Dolphin", dimScore: 'E' }, { text: "转身离开，不与傻瓜论长短", animalID: "Hamster", dimScore: 'I' }, { text: "一个冷酷的眼神，让对方知难而退", animalID: "Eagle", dimScore: 'F' }, { text: "反应慢半拍，过后才觉得应该生气", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你在一场必须分出胜负的游戏中，你的策略是？", options: [{ text: "精心布局，诱敌深入，最后一击致命", animalID: "Fox", dimScore: 'R' }, { text: "结成联盟，牺牲局部，换取最终的集体胜利", animalID: "Dolphin", dimScore: 'E' }, { text: "保持低调，等待最佳时机捡漏", animalID: "Hamster", dimScore: 'I' }, { text: "找到规则的漏洞，用意想不到的方式获胜", animalID: "Eagle", dimScore: 'F' }, { text: "用绝对的力量或气势正面碾压", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你认为“权力”的本质是？", options: [{ text: "制定规则的资格", animalID: "Fox", dimScore: 'R' }, { text: "保护所爱之人的能力", animalID: "Dolphin", dimScore: 'E' }, { text: "能让你免于打扰的屏障", animalID: "Hamster", dimScore: 'I' }, { text: "一种沉重的责任", animalID: "Eagle", dimScore: 'F' }, { text: "一种可以交换一切的筹码", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你丢失了一件非常重要的东西，你会？", options: [{ text: "把它当成一次教训，记住这种失去的感觉", animalID: "Fox", dimScore: 'R' }, { text: "伤心一会儿，然后告诉自己该放下了", animalID: "Dolphin", dimScore: 'E' }, { text: "先睡一觉，醒来再说", animalID: "Hamster", dimScore: 'I' }, { text: "发疯一样地寻找，不惜一切代价", animalID: "Eagle", dimScore: 'F' }, { text: "相信它总有一天会以某种形式回来", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你的死对头变成了一只只会“咕”的鸽子，落在了你的窗台，你会？", options: [{ text: "教它用摩斯密码“咕”出认罪书", animalID: "Fox", dimScore: 'R' }, { text: "给它搭窝喂米，然后思考自己是不是太善良", animalID: "Dolphin", dimScore: 'E' }, { text: "根本没注意是死对头，只觉得是只可爱的小鸟", animalID: "Hamster", dimScore: 'I' }, { text: "把它绑在无人机上放飞，附上纸条：“自己飞回来吧，菜鸟”", animalID: "Eagle", dimScore: 'F' }, { text: "养得肥肥胖胖，在它面前吃炸鸡", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你认为最强大的“武器”是？", options: [{ text: "无法被预测的头脑", animalID: "Fox", dimScore: 'R' }, { text: "绝对的忠诚", animalID: "Dolphin", dimScore: 'E' }, { text: "能够适应任何环境的生存力", animalID: "Hamster", dimScore: 'I' }, { text: "坚不可摧的意志", animalID: "Eagle", dimScore: 'F' }, { text: "令人无法抗拒的魅力", animalID: "Swan", dimScore: 'P' }] },
+            { question: "在一场化妆舞会上，你觉得哪种装扮最能吸引到“对的人”？", options: [{ text: "戴着乌鸦面具的神秘魔术师", animalID: "Fox", dimScore: 'R' }, { text: "穿着毛茸茸恐龙睡衣的派对核心", animalID: "Dolphin", dimScore: 'E' }, { text: "一套看起来非常舒适的睡衣套装", animalID: "Hamster", dimScore: 'I' }, { text: "假扮成一块磐石，安静地待在角落观察人群", animalID: "Eagle", dimScore: 'F' }, { text: "穿着未来感十足的银色盔甲的神明", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你更愿意与哪种“神”对话？", options: [{ text: "智慧与诡计之神", animalID: "Fox", dimScore: 'R' }, { text: "战争与守护之神", animalID: "Dolphin", dimScore: 'E' }, { text: "分解与重组之神", animalID: "Hamster", dimScore: 'I' }, { text: "自然与生命之神", animalID: "Eagle", dimScore: 'F' }, { text: "爱与美之神", animalID: "Swan", dimScore: 'P' }] },
+            { question: "你更愿意成为？", options: [{ text: "棋手", animalID: "Fox", dimScore: 'R' }, { text: "棋子（国王或皇后）", animalID: "Dolphin", dimScore: 'E' }, { text: "棋盘上的苔藓", animalID: "Hamster", dimScore: 'I' }, { text: "掀翻棋盘的人", animalID: "Eagle", dimScore: 'F' }, { text: "旁观的智者", animalID: "Swan", dimScore: 'P' }] },
+
+            // Q33-Q48: A:Crow, B:Parrot, C:Rabbit, D:Shark, E:Maggot
+            { question: "你更像哪种水？", options: [{ text: "能滴水穿石的执着水滴", animalID: "Crow", dimScore: 'R' }, { text: "能容纳百川的辽阔大海", animalID: "Parrot", dimScore: 'E' }, { text: "沼泽，表面平静但蕴含着转化之力", animalID: "Rabbit", dimScore: 'I' }, { text: "能冲毁一切的滔天巨浪", animalID: "Shark", dimScore: 'F' }, { text: "能倒映天空的平静湖泊", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "如果用一种天气来形容你的内心世界，它会是？", options: [{ text: "变幻莫测时有彩虹的阵雨天", animalID: "Crow", dimScore: 'R' }, { text: "阳光和煦微风拂面的午后", animalID: "Parrot", dimScore: 'E' }, { text: "万里无云的晴空，没什么波澜", animalID: "Rabbit", dimScore: 'I' }, { text: "雷鸣电闪的暴风雨夜", animalID: "Shark", dimScore: 'F' }, { text: "安静飘雪万籁俱寂的冬日", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你更喜欢哪种动物形象？", options: [{ text: "拥有锐利目光和强大分析力的猫头鹰", animalID: "Crow", dimScore: 'R' }, { text: "温暖可靠、永远守护你的大象", animalID: "Parrot", dimScore: 'E' }, { text: "懂得冬眠、能自我恢复的棕熊", animalID: "Rabbit", dimScore: 'I' }, { text: "翱翔于天际、掌控全局的老鹰", animalID: "Shark", dimScore: 'F' }, { text: "优雅、难以驯服的黑豹", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你认为最酷的“活法”是？", options: [{ text: "成为游戏里的最终 BOSS", animalID: "Crow", dimScore: 'R' }, { text: "成为一部超长待机番剧的主角", animalID: "Parrot", dimScore: 'E' }, { text: "成为生态循环中不可或缺的一环", animalID: "Rabbit", dimScore: 'I' }, { text: "成为一个都市传说", animalID: "Shark", dimScore: 'F' }, { text: "成为一个被机器人精心照料的盆栽", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你认为什么东西是“无价”的？", options: [{ text: "时间", animalID: "Crow", dimScore: 'R' }, { text: "爱", animalID: "Parrot", dimScore: 'E' }, { text: "身心的舒适状态", animalID: "Rabbit", dimScore: 'I' }, { text: "自由", animalID: "Shark", dimScore: 'F' }, { text: "安全感", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你如何看待“命运”？", options: [{ text: "一张可以被改写的草稿", animalID: "Crow", dimScore: 'R' }, { text: "一场需要全力以赴的赌局", animalID: "Parrot", dimScore: 'E' }, { text: "一种需要慢慢适应的自然节奏", animalID: "Rabbit", dimScore: 'I' }, { text: "根本不存在的东西", animalID: "Shark", dimScore: 'F' }, { text: "一条虽然曲折但终点已定的河流", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你最向往的“美”是？", options: [{ text: "经过时间沉淀后充满智慧的美", animalID: "Crow", dimScore: 'R' }, { text: "脆弱而转瞬即逝的美", animalID: "Parrot", dimScore: 'E' }, { text: "极简、舒适、不费力的美", animalID: "Rabbit", dimScore: 'I' }, { text: "诞生于毁灭之中的残酷的美", animalID: "Shark", dimScore: 'F' }, { text: "雄伟、壮丽、不可征服的美", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你更喜欢哪种形式的“知识”？", options: [{ text: "解锁宇宙终极规律的钥匙", animalID: "Crow", dimScore: 'R' }, { text: "与自然万物沟通的语言", animalID: "Parrot", dimScore: 'E' }, { text: "如何将危机转化为养分的秘诀", animalID: "Rabbit", dimScore: 'I' }, { text: "看透人心的能力", animalID: "Shark", dimScore: 'F' }, { text: "预测未来的水晶球", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你如何看待“捷径”？", options: [{ text: "最聪明的选择", animalID: "Crow", dimScore: 'R' }, { text: "如果能走，为什么不走？", animalID: "Parrot", dimScore: 'E' }, { text: "对我来说，没有捷径，只有舒适路径", animalID: "Rabbit", dimScore: 'I' }, { text: "我更喜欢自己走出一条路", animalID: "Shark", dimScore: 'F' }, { text: "往往是陷阱", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你认为最能体现“生命力”的场景是？", options: [{ text: "一棵古树在千年风雨中依然矗立", animalID: "Crow", dimScore: 'R' }, { text: "一群人为了共同目标而狂欢", animalID: "Parrot", dimScore: 'E' }, { text: "微生物在腐烂的木头上创造出新的生态系统", animalID: "Rabbit", dimScore: 'I' }, { text: "火山爆发，旧的毁灭，新的诞生", animalID: "Shark", dimScore: 'F' }, { text: "暴风雨后，一朵花艰难地开放", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你在一座岛屿，你希望别人如何登岛？", options: [{ text: "我会建立一座坚固的桥，只让我认可的人通过", animalID: "Crow", dimScore: 'R' }, { text: "我的海岸线很长，欢迎任何人停靠，但中心区域不对外开放", animalID: "Parrot", dimScore: 'E' }, { text: "我没有港口，只能在退潮时偷偷登岸", animalID: "Rabbit", dimScore: 'I' }, { text: "我会用迷雾将自己环绕，只有最执着的人才能找到航线", animalID: "Shark", dimScore: 'F' }, { text: "我是一座战略要塞，只对具备通行证的人开放", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你犯错后，最倾向于？", options: [{ text: "分析错误原因，确保不再犯", animalID: "Crow", dimScore: 'R' }, { text: "公开承认，承担后果", animalID: "Parrot", dimScore: 'E' }, { text: "认为这是分解旧模式、重组新模式的契机", animalID: "Rabbit", dimScore: 'I' }, { text: "悄悄弥补，当做什么都没发生过", animalID: "Shark", dimScore: 'F' }, { text: "自责很久，陷入情绪低谷", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "你如何利用你的“优势”？", options: [{ text: "用它来帮助那些需要帮助的人", animalID: "Crow", dimScore: 'R' }, { text: "大方地展示，吸引同伴或震慑敌人", animalID: "Parrot", dimScore: 'E' }, { text: "把它当成日常生活的一部分，不刻意使用", animalID: "Rabbit", dimScore: 'I' }, { text: "藏起来，作为关键时刻的底牌", animalID: "Shark", dimScore: 'F' }, { text: "只在我信任的人面前展现", animalID: "Maggot", dimScore: 'P' }] },
+            { question: "当感到极度疲惫时，你更倾向于？", options: [{ text: "用一个高效率的方法迅速解决问题，然后休息", animalID: "Crow", dimScore: 'R' }, { text: "找朋友倾诉，获得精神支持", animalID: "Parrot", dimScore: 'E' }, { text: "直接躺下，什么也不想，彻底放空", animalID: "Rabbit", dimScore: 'I' }, { text: "给自己打气，继续坚持直到完成任务", animalID: "Shark", dimScore: 'F' }, { text: "思考疲惫的来源，并调整长期计划", animalID: "Maggot", dimScore: 'P' }] },
+
+            // Q49-Q64: A:Raccoon, B:Whale, C:Sloth, D:Deer, E:Octopus
+            { question: "面对一个复杂的指令，你的处理方式是？", options: [{ text: "拆解为最小单元，按部就班进行", animalID: "Raccoon", dimScore: 'R' }, { text: "找一个权威的人来替你完成", animalID: "Whale", dimScore: 'E' }, { text: "先搁置一段时间，等自己有足够的能量再处理", animalID: "Sloth", dimScore: 'I' }, { text: "立即开始，边做边摸索", animalID: "Deer", dimScore: 'F' }, { text: "找到一个聪明人，与他一起讨论出最优方案", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你认为在进化过程中，哪种特质最能保证生存？", options: [{ text: "快速适应新环境的变异能力", animalID: "Raccoon", dimScore: 'R' }, { text: "合作共赢的社群本能", animalID: "Whale", dimScore: 'E' }, { text: "极低的代谢率和对环境的钝感", animalID: "Sloth", dimScore: 'I' }, { text: "强大的肌肉和战斗力", animalID: "Deer", dimScore: 'F' }, { text: "隐藏和伪装的能力", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你相信“天分”还是“努力”？", options: [{ text: "天分是起点，努力是燃料，缺一不可", animalID: "Raccoon", dimScore: 'R' }, { text: "努力可以克服一切，天分只是一个美丽的传说", animalID: "Whale", dimScore: 'E' }, { text: "我只相信自己的舒适度和心情", animalID: "Sloth", dimScore: 'I' }, { text: "我相信环境，环境决定了你的上限和下限", animalID: "Deer", dimScore: 'F' }, { text: "天分决定上限，努力决定下限", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你最好的隐藏天赋是？", options: [{ text: "能在最短时间内掌握任何新知识", animalID: "Raccoon", dimScore: 'R' }, { text: "能不动声色地让所有人感到舒适", animalID: "Whale", dimScore: 'E' }, { text: "能在最恶劣的环境中安静地生存下去", animalID: "Sloth", dimScore: 'I' }, { text: "能感知到别人言语中的微妙漏洞", animalID: "Deer", dimScore: 'F' }, { text: "极强的运动平衡感和反应速度", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你对“规则”的态度是？", options: [{ text: "规则是秩序的基础，必须遵守", animalID: "Raccoon", dimScore: 'R' }, { text: "规则是群体的共识，我为社群利益而遵守", animalID: "Whale", dimScore: 'E' }, { text: "规则的存在与否，对我影响不大", animalID: "Sloth", dimScore: 'I' }, { text: "规则是用来打破的", animalID: "Deer", dimScore: 'F' }, { text: "规则是给平庸者设定的，我可以绕过", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "如果生命是一场漫长的旅程，你更注重？", options: [{ text: "能否最终到达目的地（实现目标）", animalID: "Raccoon", dimScore: 'R' }, { text: "旅伴是否与你心意相通（情感连接）", animalID: "Whale", dimScore: 'E' }, { text: "路途是否足够平坦和缓慢（舒适度）", animalID: "Sloth", dimScore: 'I' }, { text: "旅程中遇到的风景（经历和回忆）", animalID: "Deer", dimScore: 'F' }, { text: "沿途的危险是否都被你成功避开（安全感）", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你认为最理想的“自我实现”状态是？", options: [{ text: "拥有完整的知识体系，能够解答任何难题", animalID: "Raccoon", dimScore: 'R' }, { text: "被所爱之人环绕，感受到无条件的爱和支持", animalID: "Whale", dimScore: 'E' }, { text: "身心处于平衡的静止状态，不被欲望驱动", animalID: "Sloth", dimScore: 'I' }, { text: "不断挑战生理和认知的极限，永远在路上", animalID: "Deer", dimScore: 'F' }, { text: "建立一个强大且有影响力的组织或结构", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "如果你的体温能显示情绪，你会希望它能？", options: [{ text: "永远保持在外界无法察觉的恒温", animalID: "Raccoon", dimScore: 'R' }, { text: "只有在亲密的人身边才会升高", animalID: "Whale", dimScore: 'E' }, { text: "一直保持恒定，避免不必要的能量损耗", animalID: "Sloth", dimScore: 'I' }, { text: "根据情绪剧烈波动，让人一眼看穿", animalID: "Deer", dimScore: 'F' }, { text: "保持略低于平均水平的清冷温度", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你更喜欢哪种艺术形式？", options: [{ text: "精密的建筑设计或古典乐的复杂结构", animalID: "Raccoon", dimScore: 'R' }, { text: "现场摇滚乐或充满激情的舞蹈", animalID: "Whale", dimScore: 'E' }, { text: "极简主义的绘画或水墨画的留白", animalID: "Sloth", dimScore: 'I' }, { text: "街头艺术或充满即兴表演的戏剧", animalID: "Deer", dimScore: 'F' }, { text: "宏大叙事的大型雕塑或史诗电影", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你认为最快的成长方式是？", options: [{ text: "系统性地阅读和学习理论知识", animalID: "Raccoon", dimScore: 'R' }, { text: "在紧密、互助的社区中协作实践", animalID: "Whale", dimScore: 'E' }, { text: "独处冥想，倾听内心的声音", animalID: "Sloth", dimScore: 'I' }, { text: "投身于一个陌生的、高压力的环境中", animalID: "Deer", dimScore: 'F' }, { text: "通过权力斗争和资源竞争获胜", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "在派对上，你会选择哪种饮料？", options: [{ text: "自调一杯奇怪的混合饮料，给朋友尝试", animalID: "Raccoon", dimScore: 'R' }, { text: "充满气泡的能量饮料，一口气喝光", animalID: "Whale", dimScore: 'E' }, { text: "一杯温热的牛奶或花草茶", animalID: "Sloth", dimScore: 'I' }, { text: "优雅地啜饮一杯精致的鸡尾酒", animalID: "Deer", dimScore: 'F' }, { text: "一杯白水，保持清醒和低调", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "如果你创造一个世界，你最先创造什么？", options: [{ text: "规则和逻辑", animalID: "Raccoon", dimScore: 'R' }, { text: "光和生命", animalID: "Whale", dimScore: 'E' }, { text: "土壤和湿气", animalID: "Sloth", dimScore: 'I' }, { text: "音乐和色彩", animalID: "Deer", dimScore: 'F' }, { text: "秘密和谜题", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "在一场必须保密的信息传递游戏中，你扮演？", options: [{ text: "加密信息，只有特定算法才能破解", animalID: "Raccoon", dimScore: 'R' }, { text: "用肢体语言和眼神与同伴交流", animalID: "Whale", dimScore: 'E' }, { text: "将信息藏在最不起眼、最舒适的角落", animalID: "Sloth", dimScore: 'I' }, { text: "用一种幽默或哲学的方式，暗示信息内容", animalID: "Deer", dimScore: 'F' }, { text: "直接控制信道，确保信息不被窃听", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你认为最有效的激励方式是？", options: [{ text: "清晰的绩效指标和晋升路径", animalID: "Raccoon", dimScore: 'R' }, { text: "情感上的认可和鼓励，归属感", animalID: "Whale", dimScore: 'E' }, { text: "确保员工有充足的休息和自我照顾时间", animalID: "Sloth", dimScore: 'I' }, { text: "提供挑战性的新项目和高度的自主权", animalID: "Deer", dimScore: 'F' }, { text: "有竞争力的薪酬和强大的头衔", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你更像哪种“神性”的声音？", options: [{ text: "宇宙深处的脉冲信号", animalID: "Raccoon", dimScore: 'R' }, { text: "新生儿的第一声啼哭", animalID: "Whale", dimScore: 'E' }, { text: "无声，绝对的寂静", animalID: "Sloth", dimScore: 'I' }, { text: "鲸鱼在深海中的歌唱", animalID: "Deer", dimScore: 'F' }, { text: "树叶光合作用时发出的微弱声响", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "如果你的身体由非生物材料构成，你希望是？", options: [{ text: "永远保持锋利的精密合金", animalID: "Raccoon", dimScore: 'R' }, { text: "Q弹的果冻", animalID: "Whale", dimScore: 'E' }, { text: "有韧性、可以自我修复的有机纤维", animalID: "Sloth", dimScore: 'I' }, { text: "透明但易碎的玻璃", animalID: "Deer", dimScore: 'F' }, { text: "会发光的钻石", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "在一场灾难中，你的第一反应是？", options: [{ text: "立即评估损失，计算存活率和必要资源", animalID: "Raccoon", dimScore: 'R' }, { text: "寻找并安抚受伤或受惊的人，提供情感支持", animalID: "Whale", dimScore: 'E' }, { text: "找到最安全、最安静的地方，等待事态平息", animalID: "Sloth", dimScore: 'I' }, { text: "冲出去探索环境，寻找逃生路线", animalID: "Deer", dimScore: 'F' }, { text: "接管指挥权，给所有人分配任务", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你认为最好的“活法”是？", options: [{ text: "在生命的尽头，回望一生无愧于心", animalID: "Raccoon", dimScore: 'R' }, { text: "被爱着，并深爱着他人", animalID: "Whale", dimScore: 'E' }, { text: "过得舒适安逸，没留下什么遗憾", animalID: "Sloth", dimScore: 'I' }, { text: "用尽潜力，达到无人企及的高度", animalID: "Deer", dimScore: 'F' }, { text: "影响并改变了世界的运行轨迹", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你更喜欢哪种形式的自我表达？", options: [{ text: "撰写逻辑严密的论文或报告", animalID: "Raccoon", dimScore: 'R' }, { text: "通过送礼物或做饭来表达心意", animalID: "Whale", dimScore: 'E' }, { text: "通过穿着或家居布置体现品味", animalID: "Sloth", dimScore: 'I' }, { text: "即兴的演讲或诗歌", animalID: "Deer", dimScore: 'F' }, { text: "明确的、不容置疑的指令", animalID: "Octopus", dimScore: 'P' }] },
+            { question: "你最渴望拥有的能力是？", options: [{ text: "完美预测事物发展轨迹", animalID: "Raccoon", dimScore: 'R' }, { text: "理解并治愈任何人的内心痛苦", animalID: "Whale", dimScore: 'E' }, { text: "在任何环境下都能快速进入深度睡眠", animalID: "Sloth", dimScore: 'I' }, { text: "瞬间掌握一门新语言或技能", animalID: "Deer", dimScore: 'F' }, { text: "拥有令人无法抗拒的魅力和影响力", animalID: "Octopus", dimScore: 'P' }] },
+        ];
+
+        // =================================================================
+        // 核心应用逻辑
+        // =================================================================
+
+        /**
+         * 切换页面视图
+         * @param {string} pageName 要激活的页面的 data-page 名称
+         */
+        function switchPage(pageName) {
+            document.querySelectorAll('[data-page]').forEach(page => {
+                page.classList.remove('active');
+            });
+            const targetPage = document.querySelector(`[data-page="${pageName}"]`);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+            window.scrollTo(0, 0); // 切换页面时滚动到顶部
+        }
+
+        /**
+         * 渲染当前题目
+         */
+        function renderQuestion() {
+            const el = quizApp.elements;
+            if (quizApp.currentQuestionIndex < 0) {
+                quizApp.currentQuestionIndex = 0;
+            }
+            
+            if (quizApp.currentQuestionIndex >= TOTAL_QUESTIONS) {
+                 el.questionTextEl.textContent = "问卷已完成。请点击下方按钮提交。";
+                 el.optionsContainer.innerHTML = '';
+                 quizApp.updateNavigationButtons();
+                 return;
+            }
+
+            const data = quizData[quizApp.currentQuestionIndex];
+            
+            el.currentQNumEl.textContent = quizApp.currentQuestionIndex + 1;
+            el.questionTextEl.textContent = `${quizApp.currentQuestionIndex + 1}. ${data.question}`;
+            el.optionsContainer.innerHTML = '';
+
+            data.options.forEach((option, index) => {
+                const key = String.fromCharCode(65 + index); // A, B, C, D, E
+                const button = document.createElement('button');
+                button.textContent = `${key}: ${option.text}`;
+                button.dataset.index = index;
+                button.className = 'option-button w-full py-3 px-4 text-left rounded-xl font-medium text-base sm:text-lg';
+
+                if (quizApp.userAnswers[quizApp.currentQuestionIndex] === index) {
+                    button.classList.add('selected-option');
+                }
+
+                button.addEventListener('click', () => quizApp.handleAnswerSelection(index));
+                el.optionsContainer.appendChild(button);
+            });
+
+            quizApp.updateNavigationButtons();
+            quizApp.updateProgressBar();
+            
+            if (quizApp.currentQuestionIndex === TOTAL_QUESTIONS - 1) {
+                const quizProgressDiv = document.getElementById('quiz-progress');
+                // 确保在最后一题时进度条显示为 100%
+                quizProgressDiv.innerHTML = '<span class="text-accent font-bold text-2xl">最后一题!</span><div class="w-full bg-gray-200 rounded-full h-2.5 mt-2"><div id="progress-bar" class="bg-primary h-2.5 rounded-full" style="width: 100%"></div></div>';
+            }
+        }
+        
+        // --- 主应用逻辑 (Non-Module) ---
+        window.quizApp = {
+            domReady: false,
+            // isAuthReady is now defined globally by the module script
+            quizInitialized: false,
+            currentQuestionIndex: 0,
+            userAnswers: new Array(TOTAL_QUESTIONS).fill(null),
+
+            elements: {},
+            
+            initQuiz: function() {
+                if (this.quizInitialized) return;
+                this.quizInitialized = true;
+
+                this.elements = {
+                    homePage: document.getElementById('home-page'),
+                    quizPage: document.getElementById('quiz-page'),
+                    resultPage: document.getElementById('result-page'),
+                    startQuizBtn: document.getElementById('start-quiz-btn'),
+                    loadingOverlay: document.getElementById('loading-overlay'),
+                    questionTextEl: document.getElementById('question-text'),
+                    optionsContainer: document.getElementById('options-container'),
+                    prevButton: document.getElementById('prev-button'),
+                    submitButton: document.getElementById('submit-button'),
+                    currentQNumEl: document.getElementById('current-q-num'),
+                    progressBar: document.getElementById('progress-bar'),
+                    archetypeName: document.getElementById('archetype-name'),
+                    archetypeDescription: document.getElementById('archetype-description'),
+                    archetypeCommentary: document.getElementById('archetype-commentary'),
+                    animalIconEl: document.getElementById('animal-icon'), // NEW ICON SPAN
+                    lowScoreAdvice: document.getElementById('low-score-advice'),
+                    topAttributes: document.getElementById('top-attributes'),
+                    otherResultsList: document.getElementById('other-results-list'),
+                    restartButton: document.getElementById('restart-button')
+                };
+
+                // 修正：将事件监听器绑定移入 initQuiz，并确保使用 this.method
+                if (this.elements.startQuizBtn) {
+                    this.elements.startQuizBtn.addEventListener('click', () => {
+                        this.switchPage('quiz');
+                        this.renderQuestion();
+                    });
+                }
+                
+                if (this.elements.prevButton) {
+                    this.elements.prevButton.addEventListener('click', () => this.handlePrevious());
+                }
+                
+                if (this.elements.submitButton) {
+                    this.elements.submitButton.addEventListener('click', () => this.handleSubmit());
+                }
+                
+                if (this.elements.restartButton) {
+                     this.elements.restartButton.addEventListener('click', () => location.reload());
+                }
+                
+                // 初始化第一题和页面
+                this.renderQuestion();
+                // 修正：启动时停留在 home 页面，等待用户交互
+                this.switchPage('home');
+            },
+
+            switchPage: switchPage, 
+            renderQuestion: renderQuestion, 
+
+            updateProgressBar: function() {
+                if (this.elements.progressBar) {
+                    this.elements.progressBar.style.width = `${((this.currentQuestionIndex + 1) / TOTAL_QUESTIONS) * 100}%`;
+                }
+            },
+
+            handleAnswerSelection: function(selectedIndex) {
+                this.userAnswers[this.currentQuestionIndex] = selectedIndex;
+
+                Array.from(this.elements.optionsContainer.children).forEach(button => {
+                    button.classList.remove('selected-option');
+                    if (parseInt(button.dataset.index) === selectedIndex) {
+                        button.classList.add('selected-option');
+                    }
+                });
+
+                this.updateNavigationButtons();
+                
+                if (this.currentQuestionIndex < TOTAL_QUESTIONS - 1) {
+                    setTimeout(() => {
+                        this.currentQuestionIndex++;
+                        this.renderQuestion();
+                    }, 150); 
+                }
+            },
+
+            updateNavigationButtons: function() {
+                const el = this.elements;
+                const isLastQuestion = this.currentQuestionIndex === TOTAL_QUESTIONS - 1;
+                const isAnswered = this.userAnswers[this.currentQuestionIndex] !== null;
+
+                if (el.prevButton) {
+                    el.prevButton.disabled = this.currentQuestionIndex === 0;
+                }
+
+                if (isLastQuestion && el.submitButton) {
+                    el.submitButton.classList.remove('hidden');
+                    el.submitButton.disabled = !isAnswered;
+                    if (el.prevButton) el.prevButton.classList.remove('hidden'); 
+                } else if (el.submitButton) {
+                    el.submitButton.classList.add('hidden');
+                }
+            },
+
+            handlePrevious: function() {
+                if (this.currentQuestionIndex > 0) {
+                    this.currentQuestionIndex--;
+                    this.renderQuestion();
+                }
+            },
+
+            handleSubmit: async function() {
+                const el = this.elements;
+                if (el.submitButton && el.submitButton.disabled) return;
+                
+                const unansweredQuestions = this.userAnswers.filter(answer => answer === null).length;
+                if (unansweredQuestions > 0) {
+                    console.error(`请先回答所有问题！还有 ${unansweredQuestions} 题未完成。`);
+                    return;
+                }
+
+                if (el.loadingOverlay) el.loadingOverlay.classList.remove('hidden');
+                if (el.submitButton) {
+                    el.submitButton.disabled = true;
+                    el.submitButton.textContent = '解析中...';
+                }
+                
+                try {
+                    const results = this.calculateResult();
+                    
+                    await this.saveResult(results); 
+                    this.renderResultContent(results);
+                    
+                } catch (e) {
+                    console.error("提交/结果生成失败:", e);
+                    const results = this.calculateResult();
+                    this.renderResultContent(results);
+                } finally {
+                    this.switchPage('result');
+                    if (el.loadingOverlay) el.loadingOverlay.classList.add('hidden');
+                    if (el.submitButton) {
+                        el.submitButton.textContent = '查看测试结果 🚀';
+                        el.submitButton.disabled = false;
+                    }
+                }
+            },
+            
+            // --- 结果计算与渲染 ---
+
+            calculateResult: function() {
+                // 1. 动物计数器 (精确匹配)
+                const animalCounts = Object.keys(ANIMAL_ARCHETYPES).reduce((acc, key) => {
+                    acc[key] = 0;
+                    return acc;
+                }, {});
+                
+                this.userAnswers.forEach((answerIndex, questionIndex) => {
+                    if (answerIndex !== null) {
+                        const option = quizData[questionIndex].options[answerIndex];
+                        const animalID = option.animalID;
+                        
+                        // 核心：动物得分 +1
+                        if (animalID && animalCounts[animalID] !== undefined) {
+                            animalCounts[animalID]++;
+                        }
+                    }
+                });
+
+                // 2. 确定得分最高的动物 (精确匹配，平局随机)
+                let winningAnimalID = null;
+                let maxCount = -1;
+                let tieAnimals = [];
+
+                Object.entries(animalCounts).forEach(([animalID, count]) => {
+                    if (count > maxCount) {
+                        maxCount = count;
+                        winningAnimalID = animalID;
+                        tieAnimals = [animalID]; 
+                    } else if (count === maxCount) {
+                        tieAnimals.push(animalID); 
+                    }
+                });
+                
+                if (tieAnimals.length > 1) {
+                    // 确保平局随机性
+                    const randomIndex = Math.floor(Math.random() * tieAnimals.length);
+                    winningAnimalID = tieAnimals[randomIndex];
+                } else if (!winningAnimalID) {
+                    winningAnimalID = 'Wolf'; 
+                }
+                
+                const finalArchetype = ANIMAL_ARCHETYPES[winningAnimalID];
+                
+                return { archetype: finalArchetype };
+            },
+
+            renderResultContent: function(results) {
+                const el = this.elements;
+                const archetype = results.archetype; 
+                
+                if (el.archetypeName) el.archetypeName.textContent = archetype.name;
+                if (el.archetypeDescription) el.archetypeDescription.textContent = archetype.description;
+                if (el.archetypeCommentary) el.archetypeCommentary.textContent = archetype.commentary;
+                
+                // NEW: Set the emoji icon content
+                if (el.animalIconEl) el.animalIconEl.textContent = archetype.icon;
+                
+                this.renderSexyTags(archetype.tags);
+                
+                if (el.lowScoreAdvice) {
+                    el.lowScoreAdvice.innerHTML = this.generateGrowthAdvice(archetype);
+                }
+            },
+
+            renderSexyTags: function(tags) {
+                const el = this.elements;
+                if (!el.topAttributes) return;
+                
+                el.topAttributes.innerHTML = '';
+                
+                tags.forEach((tagText) => {
+                    const tag = document.createElement('span');
+                    tag.className = `px-4 py-1 text-base font-bold rounded-full shadow-lg bg-accent text-gray-900 border border-yellow-500`;
+                    tag.textContent = `#${tagText}`;
+                    el.topAttributes.appendChild(tag);
+                });
+            },
+            
+            // 核心特质分析 -> 幽默诙谐的成长建议
+            generateGrowthAdvice: function(archetype) {
+                const key = archetype.dimension;
+                const name = archetype.name;
+                
+                let advice = `<strong>来自灵魂深处的直言不讳：</strong>\n\n`;
+
+                if (key === 'R') { 
+                    advice += `🧠 **【战略家之殇】** 你的大脑是台永不宕机的服务器，总是寻求最优解。建议你：<strong>偶尔拔掉网线，让心跳而不是 CPU 决定下一秒的行动。</strong> 人生不是代码，容错率高一点，才能遇到惊喜。`; 
+                }
+                else if (key === 'E') { 
+                    advice += `💖 **【忠犬的边界】** 你的心是人群中的暖炉，为社群燃烧。但请记住：<strong>不是所有人都值得你燃烧。</strong> 学会保护自己的能量，对消耗你的人说“不”，对爱你的人说“我需要帮助”。`; 
+                }
+                else if (key === 'I') { 
+                    advice += `🛌 **【安逸者的挑战】** 你的舒适区已经进化成了避世豪宅。请注意：<strong>世界上最伟大的冒险，往往发生在‘懒得动’的下一秒。</strong> 强迫自己每月做一件“麻烦事”，给你的舒适带来一点刺激。`; 
+                }
+                else if (key === 'F') { 
+                    advice += `🦅 **【野马的港湾】** 你是一匹脱缰的野马，追逐自由，逃避责任。你的自由是为了探索边界，而非逃避责任。建议你：<strong>找到一个值得你驻足的港湾，但别忘了随时扬帆。</strong> 真正的独立，是敢于承担连接。`; 
+                }
+                else if (key === 'P') { 
+                    advice += `👑 **【王者的温柔】** 你天生拥有主宰一切的气场，但不是所有人都需要被统治。建议你：<strong>放下你的权杖，尝试用‘倾听’来主宰对话，你会发现更大的力量。</strong> 倾听是比发号施令更高级的掌控术。`; 
+                }
+                
+                return advice;
+            },
+
+            // --- Firestore 通信 ---
+            saveResult: async function(results) {
+                if (!window.fb || !window.fb.getUserId() || !window.firestoreMethods || !window.isAuthReady) {
+                    console.error("Firestore API 未准备好，无法保存结果。");
+                    return;
+                }
+                const { db, getUserId, getAppId } = window.fb;
+                const { doc, setDoc } = window.firestoreMethods;
+                
+                const userId = getUserId();
+                const appId = getAppId();
+                
+                try {
+                    const docRef = doc(db, `artifacts/${appId}/public/data/results`, userId);
+                    await setDoc(docRef, {
+                        userId: userId,
+                        archetypeName: results.archetype.name,
+                        archetypeKey: results.archetype.dimension,
+                        timestamp: Date.now()
+                    });
+                    console.log("结果保存成功，UserID:", userId);
+                } catch (e) {
+                    console.error("保存结果到 Firestore 失败: ", e);
+                }
+            },
+            
+            // --- Readiness Check ---
+            checkReadiness: function() {
+                if (this.domReady && window.isAuthReady && !this.quizInitialized) {
+                    this.initQuiz();
+                }
+            }
+        };
+        
+        // Set DOM Ready flag
+        document.addEventListener('DOMContentLoaded', () => {
+            window.quizApp.domReady = true;
+            if (window.isAuthReady !== undefined) {
+                 window.quizApp.checkReadiness();
+            }
+        });
+
+    </script>
+</body>
+</html>
