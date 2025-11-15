@@ -620,12 +620,16 @@
          * @param {string} pageName 要激活的页面的 data-page 名称
          */
         function switchPage(pageName) {
+            console.log(`切换页面到: ${pageName}`);
             document.querySelectorAll('[data-page]').forEach(page => {
                 page.classList.remove('active');
             });
             const targetPage = document.querySelector(`[data-page="${pageName}"]`);
             if (targetPage) {
                 targetPage.classList.add('active');
+                console.log(`页面 ${pageName} 已激活`);
+            } else {
+                console.error(`未找到页面: ${pageName}`);
             }
             window.scrollTo(0, 0); // 切换页面时滚动到顶部
         }
@@ -794,15 +798,21 @@
             },
 
             handleSubmit: async function() {
+                console.log("开始处理提交");
                 const el = this.elements;
-                if (el.submitButton && el.submitButton.disabled) return;
+                if (el.submitButton && el.submitButton.disabled) {
+                    console.log("提交按钮被禁用，无法提交");
+                    return;
+                }
                 
                 const unansweredQuestions = this.userAnswers.filter(answer => answer === null).length;
                 if (unansweredQuestions > 0) {
+                    alert(`请先回答所有问题！还有 ${unansweredQuestions} 题未完成。`);
                     console.error(`请先回答所有问题！还有 ${unansweredQuestions} 题未完成。`);
                     return;
                 }
 
+                console.log("所有问题已回答，开始提交流程");
                 if (el.loadingOverlay) el.loadingOverlay.classList.remove('hidden');
                 if (el.submitButton) {
                     el.submitButton.disabled = true;
@@ -811,15 +821,20 @@
                 
                 try {
                     const results = this.calculateResult();
+                    console.log("计算结果:", results);
                     
                     await this.saveResult(results); 
+                    console.log("保存结果完成");
+                    
                     this.renderResultContent(results);
+                    console.log("渲染结果完成");
                     
                 } catch (e) {
                     console.error("提交/结果生成失败:", e);
                     const results = this.calculateResult();
                     this.renderResultContent(results);
                 } finally {
+                    console.log("准备跳转到结果页面");
                     this.switchPage('result');
                     if (el.loadingOverlay) el.loadingOverlay.classList.add('hidden');
                     if (el.submitButton) {
