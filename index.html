@@ -24,12 +24,20 @@
             font-family: 'Inter', sans-serif;
             background-color: var(--background);
             transition: all 0.3s ease-in-out;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
         }
         .card {
             background-color: white;
             border-radius: 1.5rem;
             /* 柔和的紫色阴影 */
             box-shadow: 0 10px 30px -5px rgba(91, 33, 182, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            width: 100%;
+            max-width: 500px;
         }
         .btn-primary {
             background-color: var(--primary);
@@ -66,6 +74,7 @@
             align-items: center;
             justify-content: center;
             padding: 1rem;
+            width: 100%;
         }
         [data-page]:not(.active) {
             display: none;
@@ -88,8 +97,8 @@
         }
         /* 动物图标样式 */
         #archetype-icon-container {
-            width: 12rem; /* w-48 */
-            height: 12rem; /* h-48 */
+            width: 8rem; /* 手机端缩小 */
+            height: 8rem; /* 手机端缩小 */
             border: 4px solid var(--secondary);
             background-color: white;
             border-radius: 9999px; /* rounded-full */
@@ -97,9 +106,63 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            margin: 0 auto;
         }
         #animal-icon {
-            font-size: 5rem; /* text-8xl approx */
+            font-size: 3rem; /* 手机端缩小 */
+        }
+        
+        /* 手机端特定样式 */
+        @media (max-width: 640px) {
+            body {
+                padding: 0.5rem;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+            }
+            .page-container {
+                padding: 0.5rem;
+                min-height: calc(100vh - 1rem);
+            }
+            .card {
+                padding: 1.5rem !important;
+                border-radius: 1rem;
+            }
+            #question-text {
+                font-size: 1.25rem !important;
+                line-height: 1.6;
+                margin-bottom: 1.5rem;
+            }
+            .option-button {
+                padding: 0.75rem 1rem !important;
+                font-size: 0.9rem;
+                margin-bottom: 0.5rem;
+            }
+            #current-q-num {
+                font-size: 1.5rem !important;
+            }
+            #quiz-progress {
+                margin-bottom: 1.5rem;
+            }
+            #archetype-name {
+                font-size: 2rem !important;
+            }
+            #top-attributes span {
+                font-size: 0.8rem !important;
+                padding: 0.5rem 1rem !important;
+            }
+            #archetype-commentary, #low-score-advice {
+                font-size: 0.9rem !important;
+                line-height: 1.5;
+            }
+            .btn-primary {
+                padding: 0.75rem 1rem !important;
+                font-size: 1rem;
+            }
+            footer {
+                padding-top: 1rem !important;
+            }
         }
     </style>
 
@@ -170,7 +233,7 @@
         window.addEventListener('load', initializeFirebase);
     </script>
 </head>
-<body class="min-h-screen flex flex-col items-center justify-center p-4">
+<body>
 
     <!-- 加载指示器 -->
     <div id="loading-overlay" class="fixed inset-0 bg-white bg-opacity-70 z-50 flex items-center justify-center hidden">
@@ -180,49 +243,49 @@
 
     <!-- 首页 - 项目简介与同意书 -->
     <div id="home-page" data-page="home" class="page-container active">
-        <div class="card p-8 max-w-xl w-full text-center">
+        <div class="card p-6 sm:p-8 text-center">
             
-            <header class="mb-8 border-b-2 border-primary/20 pb-4">
-                <p class="text-xl font-medium text-secondary mb-2 tracking-widest">
+            <header class="mb-6 border-b-2 border-primary/20 pb-4">
+                <p class="text-lg sm:text-xl font-medium text-secondary mb-2 tracking-widest">
                     灵魂探索计划 | 64 问
                 </p>
-                <h1 class="text-5xl font-extrabold text-primary leading-tight">
+                <h1 class="text-3xl sm:text-5xl font-extrabold text-primary leading-tight">
                     🐾 你的动物塑原型
                 </h1>
             </header>
             
-            <p class="text-lg text-gray-700 mb-6 leading-relaxed">
+            <p class="text-base sm:text-lg text-gray-700 mb-6 leading-relaxed">
                 人类的每一个细微选择，都与自然界某种动物的生存本能和独特光芒相连。这份问卷是通往你潜意识的钥匙，它将在 20 种灵魂动物中，为你揭示最真实的自我。
             </p>
 
-            <div class="space-y-4 text-left mb-8 px-2">
-                <h2 class="text-xl font-bold text-primary mb-3">完成测试，你将获得：</h2>
+            <div class="space-y-3 text-left mb-6 px-2">
+                <h2 class="text-lg sm:text-xl font-bold text-primary mb-3">完成测试，你将获得：</h2>
                 
                 <!-- 列表美化 -->
                 <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
                     <span class="text-2xl text-accent">💜</span>
-                    <p class="text-gray-800 font-semibold">独一无二的灵魂动物动物塑</p>
+                    <p class="text-gray-800 font-semibold text-sm sm:text-base">独一无二的灵魂动物动物塑</p>
                 </div>
                  <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
                     <span class="text-2xl text-accent">✨</span>
-                    <p class="text-gray-800 font-semibold">三个最贴切的专属性感标签</p>
+                    <p class="text-gray-800 font-semibold text-sm sm:text-base">三个最贴切的专属性感标签</p>
                 </div>
                  <div class="flex items-center space-x-3 p-3 rounded-xl bg-secondary/10 border border-secondary/30 transform hover:scale-[1.01] transition duration-200">
                     <span class="text-2xl text-accent">🚀</span>
-                    <p class="text-gray-800 font-semibold">深度解析你的行为特质与成长建议</p>
+                    <p class="text-gray-800 font-semibold text-sm sm:text-base">深度解析你的行为特质与成长建议</p>
                 </div>
             </div>
 
-            <div class="border border-gray-300 py-6 mb-8 text-left bg-gray-50 p-4 rounded-xl">
-                <h2 class="text-xl font-bold text-primary mb-3">知情同意书 (匿名参与)</h2>
-                <p class="text-sm text-gray-600 space-y-1">
-                  1. 本测试仅供娱乐和自我反思，不具备专业心理学诊断效力。
-                  2. 您是完全自愿参与的，可以在任何时候退出。
+            <div class="border border-gray-300 py-4 mb-6 text-left bg-gray-50 p-4 rounded-xl">
+                <h2 class="text-lg sm:text-xl font-bold text-primary mb-3">知情同意书 (匿名参与)</h2>
+                <p class="text-xs sm:text-sm text-gray-600 space-y-1">
+                  1. 本测试仅供娱乐和自我反思，不具备专业心理学诊断效力。<br>
+                  2. 您是完全自愿参与的，可以在任何时候退出。<br>
                   3. 本结果仅用于展示和优化题目，我们不会收集您的敏感信息。
                 </p>
             </div>
 
-            <button id="start-quiz-btn" class="btn-primary w-full py-4 text-xl font-bold rounded-xl">
+            <button id="start-quiz-btn" class="btn-primary w-full py-3 sm:py-4 text-lg sm:text-xl font-bold rounded-xl">
                 我同意并开始测试 🚀
             </button>
         </div>
@@ -230,8 +293,8 @@
     
     <!-- 题目页 -->
     <div id="quiz-page" data-page="quiz" class="page-container">
-        <div class="card p-6 max-w-xl w-full">
-            <header class="mb-6">
+        <div class="card p-4 sm:p-6">
+            <header class="mb-4 sm:mb-6">
                 <div id="quiz-progress" class="mb-4 text-center">
                     <span class="text-primary font-bold text-2xl" id="current-q-num">1</span>
                     <span class="text-gray-400 text-xl">/64</span>
@@ -242,19 +305,19 @@
             </header>
 
             <main>
-                <p id="question-text" class="text-2xl font-semibold text-gray-800 text-center leading-relaxed mb-6 min-h-[4rem] flex items-center justify-center">
+                <p id="question-text" class="text-xl sm:text-2xl font-semibold text-gray-800 text-center leading-relaxed mb-4 sm:mb-6 min-h-[4rem] flex items-center justify-center">
                     加载题目中...
                 </p>
-                <div id="options-container" class="space-y-4">
+                <div id="options-container" class="space-y-3 sm:space-y-4">
                     <!-- 选项将通过 JS 动态生成 -->
                 </div>
             </main>
 
-            <footer class="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center">
+            <footer class="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-100 flex justify-between items-center">
                 <button id="prev-button" class="text-sm text-gray-500 hover:text-primary transition-colors disabled:opacity-50" disabled>
                     &larr; 返回上一题
                 </button>
-                <button id="submit-button" class="btn-primary py-3 px-8 text-lg font-bold rounded-xl hidden" disabled>
+                <button id="submit-button" class="btn-primary py-2 sm:py-3 px-6 sm:px-8 text-base sm:text-lg font-bold rounded-xl hidden" disabled>
                     查看测试结果 🚀
                 </button>
             </footer>
@@ -263,41 +326,41 @@
     
     <!-- 结果页 -->
     <div id="result-page" data-page="result" class="page-container">
-        <div class="card p-6 max-w-3xl w-full">
-            <h2 class="text-4xl font-extrabold text-primary text-center mb-6">
+        <div class="card p-4 sm:p-6">
+            <h2 class="text-2xl sm:text-4xl font-extrabold text-primary text-center mb-4 sm:mb-6">
                 🎉 你的动物塑已解析完成
             </h2>
-            <div class="flex flex-col gap-6 items-center">
+            <div class="flex flex-col gap-4 sm:gap-6 items-center">
                 <!-- 动物塑图和点评 (居中显示) -->
-                <div class="w-full max-w-md">
+                <div class="w-full">
                     <div class="flex justify-center mb-4">
                         <!-- 使用 Div 容器和 Span 标签来显示 Emoji -->
                         <div id="archetype-icon-container">
                             <span id="animal-icon"></span> 
                         </div>
                     </div>
-                    <h3 class="text-4xl font-bold text-center text-gray-800 mb-2" id="archetype-name"></h3>
-                    <p class="text-base text-center text-gray-500 mb-4" id="archetype-description"></p>
+                    <h3 class="text-2xl sm:text-4xl font-bold text-center text-gray-800 mb-2" id="archetype-name"></h3>
+                    <p class="text-sm sm:text-base text-center text-gray-500 mb-4" id="archetype-description"></p>
                     
-                    <div id="top-attributes" class="mb-6 flex flex-wrap justify-center gap-3">
+                    <div id="top-attributes" class="mb-4 sm:mb-6 flex flex-wrap justify-center gap-2 sm:gap-3">
                         <!-- 专属性感标签将在此处插入 -->
                     </div>
 
                     <!-- 深度点评 - 增加色彩和对比度 -->
-                    <div class="p-4 bg-[#EDE9FE] rounded-xl border border-primary/40 mb-6">
-                        <h4 class="font-extrabold text-primary mb-2 text-2xl tracking-wide">【动物塑深度点评】</h4>
-                        <p id="archetype-commentary" class="text-gray-700 text-base leading-relaxed"></p>
+                    <div class="p-3 sm:p-4 bg-[#EDE9FE] rounded-xl border border-primary/40 mb-4 sm:mb-6">
+                        <h4 class="font-extrabold text-primary mb-2 text-lg sm:text-2xl tracking-wide">【动物塑深度点评】</h4>
+                        <p id="archetype-commentary" class="text-gray-700 text-sm sm:text-base leading-relaxed"></p>
                     </div>
 
                     <!-- 成长空间与小建议 - 使用 accent 强调 -->
-                    <div class="p-4 bg-accent/10 rounded-xl border border-accent/60">
-                        <h4 class="font-extrabold text-accent mb-2 text-2xl">🌱 成长空间与小建议</h4>
-                        <p id="low-score-advice" class="text-gray-800 text-base leading-relaxed whitespace-pre-line">（此区块将用于展示该动物塑模型的关键特质描述）</p>
+                    <div class="p-3 sm:p-4 bg-accent/10 rounded-xl border border-accent/60">
+                        <h4 class="font-extrabold text-accent mb-2 text-lg sm:text-2xl">🌱 成长空间与小建议</h4>
+                        <p id="low-score-advice" class="text-gray-800 text-sm sm:text-base leading-relaxed whitespace-pre-line">（此区块将用于展示该动物塑模型的关键特质描述）</p>
                     </div>
                 </div>
             </div>
             
-            <button id="restart-button" class="btn-primary w-full mt-6 py-3 rounded-xl font-bold">
+            <button id="restart-button" class="btn-primary w-full mt-4 sm:mt-6 py-3 rounded-xl font-bold">
                 再次探索你的灵魂 🔄
             </button>
         </div>
@@ -711,7 +774,7 @@
                 
                 tags.forEach((tagText) => {
                     const tag = document.createElement('span');
-                    tag.className = `px-4 py-1 text-base font-bold rounded-full shadow-lg bg-accent text-gray-900 border border-yellow-500`;
+                    tag.className = `px-3 py-1 text-sm sm:text-base font-bold rounded-full shadow-lg bg-accent text-gray-900 border border-yellow-500`;
                     tag.textContent = `#${tagText}`;
                     el.topAttributes.appendChild(tag);
                 });
@@ -728,16 +791,16 @@
                     advice += `🧠 **【战略家之殇】** 你的大脑是台永不宕机的服务器，总是寻求最优解。建议你：<strong>偶尔拔掉网线，让心跳而不是 CPU 决定下一秒的行动。</strong> 人生不是代码，容错率高一点，才能遇到惊喜。`; 
                 }
                 else if (key === 'E') { 
-                    advice += `💖 **【忠犬的边界】** 你的心是人群中的暖炉，为社群燃烧。但请记住：<strong>不是所有人都值得你燃烧。</strong> 学会保护自己的能量，对消耗你的人说“不”，对爱你的人说“我需要帮助”。`; 
+                    advice += `💖 **【忠犬的边界】** 你的心是人群中的暖炉，为社群燃烧。但请记住：<strong>不是所有人都值得你燃烧。</strong> 学会保护自己的能量，对消耗你的人说"不"，对爱你的人说"我需要帮助"。`; 
                 }
                 else if (key === 'I') { 
-                    advice += `🛌 **【安逸者的挑战】** 你的舒适区已经进化成了避世豪宅。请注意：<strong>世界上最伟大的冒险，往往发生在‘懒得动’的下一秒。</strong> 强迫自己每月做一件“麻烦事”，给你的舒适带来一点刺激。`; 
+                    advice += `🛌 **【安逸者的挑战】** 你的舒适区已经进化成了避世豪宅。请注意：<strong>世界上最伟大的冒险，往往发生在'懒得动'的下一秒。</strong> 强迫自己每月做一件"麻烦事"，给你的舒适带来一点刺激。`; 
                 }
                 else if (key === 'F') { 
                     advice += `🦅 **【野马的港湾】** 你是一匹脱缰的野马，追逐自由，逃避责任。你的自由是为了探索边界，而非逃避责任。建议你：<strong>找到一个值得你驻足的港湾，但别忘了随时扬帆。</strong> 真正的独立，是敢于承担连接。`; 
                 }
                 else if (key === 'P') { 
-                    advice += `👑 **【王者的温柔】** 你天生拥有主宰一切的气场，但不是所有人都需要被统治。建议你：<strong>放下你的权杖，尝试用‘倾听’来主宰对话，你会发现更大的力量。</strong> 倾听是比发号施令更高级的掌控术。`; 
+                    advice += `👑 **【王者的温柔】** 你天生拥有主宰一切的气场，但不是所有人都需要被统治。建议你：<strong>放下你的权杖，尝试用'倾听'来主宰对话，你会发现更大的力量。</strong> 倾听是比发号施令更高级的掌控术。`; 
                 }
                 
                 return advice;
